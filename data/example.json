@@ -1,0 +1,13 @@
+{
+    "file_info": {
+	"kind": "falco_waves",
+	"version": "v1"
+    },
+    "tables": [
+	{
+	    "name": "E352/E370",
+	    "path": "/Applications/WaveEdit/banks/ROM B.wav",
+	    "size": 256
+	}
+    ]
+}
