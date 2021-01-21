@@ -1,2 +1,2 @@
 # falco
-a wavetable synth engine for norns
+a multi-wavetable synth engine for norns
