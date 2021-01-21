@@ -76,7 +76,7 @@ Falco {
       pos = i_buf + (i_numBuf * posEnv);
       detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
 
-      sig = VOsc3.ar(pos.poll, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
+      sig = VOsc3.ar(pos, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
       sig = Splay.ar(sig);
       sig = LeakDC.ar(sig);
 
@@ -102,7 +102,7 @@ Falco {
         \i_decay, decay,
         \i_sus, sus,
         \i_rel, rel,
-      ]);
+      ], this.server);
     }, { nil });
   }
 
