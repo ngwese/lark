@@ -80,11 +80,10 @@ Lark {
       pos = i_buf + (i_numBuf * posEnv);
       detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
 
-      sig = VOsc3.ar(pos.poll, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
-      sig = Splay.ar(sig);
+      sig = VOsc3.ar(pos, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
       sig = LeakDC.ar(sig);
 
-      Out.ar(out, sig);
+      Out.ar(out, sig!2);
     }).add;
 
   }
