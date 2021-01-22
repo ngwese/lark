@@ -13,7 +13,7 @@ mod(~x.size, 64)
 ~x.slice(0, 255).plot
 ~x.plot
 
-~w = FalcoWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256);
+~w = LarkWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256);
 
 ~w.size
 
@@ -31,7 +31,8 @@ var notes, on, off;
 MIDIClient.init;
 MIDIIn.connectAll;
 
-~engine = Falco.new(s);
+~engine = Lark.new(s);
+~engine.oscA_type = \lark_osc3;
 
 notes = Array.newClear(128);
 
@@ -55,10 +56,10 @@ MIDIdef.noteOff(\noteOff, { arg vel, num, chan, src;
 )
 
 ~engine.buffers[26]
-~engine.oscA_type = \falco_silent;
+~engine.oscA_type = \lark_silent;
 
 (
-~engine.oscA_table = FalcoTable.fromFile(
+~engine.oscA_table = LarkTable.fromFile(
   s,
   "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav",
   2048

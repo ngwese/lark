@@ -1,7 +1,7 @@
 //
-// Falco, a wavetable synth
+// Lark, a wavetable synth
 //
-Falco {
+Lark {
   var <server;
   var <default_table;
 
@@ -13,7 +13,11 @@ Falco {
   var <>oscB_enabled;
   var <>oscB_table;
 
-  // Create and initialize a new Falco instance on the given server
+  var <>oscSub_enabled;
+  var <>oscSub_amp;
+
+
+  // Create and initialize a new Lark instance on the given server
   *new { arg server;
     ^super.new.init(server)
   }
@@ -21,17 +25,17 @@ Falco {
   // Initialize class and define server side resources
   init { arg srv;
     server = srv;
-    default_table = FalcoTable.new(srv).load(FalcoWaves.default);
+    default_table = LarkTable.new(srv).load(LarkWaves.default);
 
-    oscA_type = \falco_osc1;
+    oscA_type = \lark_osc1;
     oscA_enabled = true;
     oscA_table = default_table;
 
-    oscB_type = \falco_osc1;
+    oscB_type = \lark_osc1;
     oscB_enabled = false;
     oscB_table = default_table;
 
-    SynthDef(\falco_osc1, {
+    SynthDef(\lark_osc1, {
       arg out=0, hz=300, gate=1, amp=0.3, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1,
           i_buf=0, i_numBuf=1, bufPos=0;
       var sig, pos, ampEnv, posEnv, detune;
@@ -56,7 +60,7 @@ Falco {
     }).add;
 
 
-    SynthDef(\falco_osc3, {
+    SynthDef(\lark_osc3, {
       arg out=0, hz=300, gate=1, amp=0.3, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1,
           i_buf=0, i_numBuf=1, bufPos=0, spread=0.2, spreadHz=0.2;
       var sig, pos, ampEnv, posEnv, detune;
@@ -76,7 +80,7 @@ Falco {
       pos = i_buf + (i_numBuf * posEnv);
       detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
 
-      sig = VOsc3.ar(pos, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
+      sig = VOsc3.ar(pos.poll, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3) * ampEnv;
       sig = Splay.ar(sig);
       sig = LeakDC.ar(sig);
 
@@ -111,10 +115,10 @@ Falco {
 }
 
 //
-// FalcoWaves provides various helper methods to load or generate collections
-// of wavetables suitable for passing to FalcoTable.
+// LarkWaves provides various helper methods to load or generate collections
+// of wavetables suitable for passing to LarkTable.
 //
-FalcoWaves {
+LarkWaves {
 
   // Generate the default (sine) wave
   *default {
@@ -151,7 +155,7 @@ FalcoWaves {
     var waves = Array.newClear(numWaves);
     var offset = 0;
 
-    postln("FalcoWaves.fromFile(\"" ++ path ++ "\", " ++ tableSize ++ ")");
+    postln("LarkWaves.fromFile(\"" ++ path ++ "\", " ++ tableSize ++ ")");
     postln("  numWaves = " ++ numWaves);
     postln("  extra = " ++ f.numFrames.mod(tableSize));
     // TODO: check waveSize is power of 2
@@ -170,9 +174,9 @@ FalcoWaves {
 }
 
 //
-// FalcoTable allocates server Buffers and loads waves into the server
+// LarkTable allocates server Buffers and loads waves into the server
 //
-FalcoTable {
+LarkTable {
   var <server;
   var <buffers;
   var <baseBuf;
@@ -180,7 +184,7 @@ FalcoTable {
   var <numLoaded;
 
   *fromFile { arg server, path, waveSize;
-    ^this.new(server).load(FalcoWaves.fromFile(path, waveSize));
+    ^this.new(server).load(LarkWaves.fromFile(path, waveSize));
   }
 
   *new { arg server;
@@ -211,7 +215,7 @@ FalcoTable {
     baseBuf = buffers[0].bufnum;
     numBuf = buffers.size - 2;
 
-    postln("FalcoTable.load: base = " ++ baseBuf ++ ", num = " ++ numBuf);
+    postln("LarkTable.load: base = " ++ baseBuf ++ ", num = " ++ numBuf);
   }
 
   free {
@@ -229,24 +233,24 @@ FalcoTable {
 
 /*
 
-~q = FalcoTable.new(s).load(FalcoWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256));
-~q = FalcoTable.fromFile(s, "/Applications/WaveEdit/banks/ROM B.wav", 256);
+~q = LarkTable.new(s).load(LarkWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256));
+~q = LarkTable.fromFile(s, "/Applications/WaveEdit/banks/ROM B.wav", 256);
 ~q.numBuf
 ~q.numLoaded
 ~q.free
-~f = Falco.new(s);
-~f.loadBuffers(FalcoWaves.random());
+~f = Lark.new(s);
+~f.loadBuffers(LarkWaves.random());
 
-~w = FalcoWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256);
-~w = FalcoWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/4088.wav", 2048);
-~w = FalcoWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/Jno.wav", 2048);
-~w = FalcoWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav", 2048);
+~w = LarkWaves.fromFile("/Applications/WaveEdit/banks/ROM B.wav", 256);
+~w = LarkWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/4088.wav", 2048);
+~w = LarkWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/Jno.wav", 2048);
+~w = LarkWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav", 2048);
 
 ~f.loadBuffers(~w);
 
-~f.loadBuffers(FalcoWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Digital/SubBass_1.wav", 2048));
+~f.loadBuffers(LarkWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Digital/SubBass_1.wav", 2048));
 
-~f.loadBuffers(FalcoWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/User/AF kaivo test2.wav", 2048));
+~f.loadBuffers(LarkWaves.fromFile("/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/User/AF kaivo test2.wav", 2048));
 
 
 ~f.buffers[0].query;
@@ -270,7 +274,7 @@ FalcoTable {
 ~z.set(\gate, 0);
 
 
-~wt = FalcoWaves.random();
+~wt = LarkWaves.random();
 ~w.do({arg w, i; w.plot(i.asString)});
 
 

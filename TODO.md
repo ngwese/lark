@@ -21,6 +21,6 @@
 
 ## script
 
-- [ ] norns test harness: `falco/play`
-- [ ] patch editor, save patches: `falco/edit`
+- [ ] norns test harness: `lark/play`
+- [ ] patch editor, save patches: `lark/edit`
 

@@ -1,6 +1,6 @@
 {
     "file_info": {
-	"kind": "falco_waves",
+	"kind": "lark_waves",
 	"version": "v1"
     },
     "tables": [
