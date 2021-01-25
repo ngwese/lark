@@ -75,34 +75,45 @@ Lark {
 
     SynthDef(\lark_osc1, {
       arg out=0,
-          hz=300, hzOffset=0, hzMod=0, hzModMult=1.0,
+          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0,
           pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1;
       var sig, pitch, buffer, wt;
 
       wt = pos + posMod * posModMult;
-      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 1)), i_startBuf, i_numBuf - 1);
-      pitch = hz + hzOffset + (hzMod * hzModMult);
-      sig = LeakDC.ar(VOsc.ar(buffer, freq: pitch));
+      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
+      pitch = (hz * hzRatio) + (hzMod * hzModMult);
+      sig = LeakDC.ar(VOsc.ar(buffer, freq: pitch, mul: 0.3));
 
       Out.ar(out, sig);
     }).add;
 
     SynthDef(\lark_osc3, {
       arg out=0,
-          hz=300, hzOffset=0, hzMod=0, hzModMult=1.0,
+          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0,
           pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1,
           spread=0.2, spreadHz=0.2;
       var sig, pitch, buffer, detune, wt;
 
       wt = pos + posMod * posModMult;
-      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 1)), i_startBuf, i_numBuf - 1);
-      pitch = hz + hzOffset + (hzMod * hzModMult);
+      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
+      pitch = (hz * hzRatio) + (hzMod * hzModMult);
       detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
-      sig = LeakDC.ar(VOsc3.ar(buffer, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2]));
+      sig = LeakDC.ar(VOsc3.ar(buffer, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3));
 
-      Out.ar(out, sig!2);
+      Out.ar(out, sig);
     }).add;
 
+    SynthDef(\lark_pulse, {
+      arg out=0, hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0,
+          width=0.5, widthMod=0, widthModMult=1.0;
+      var sig, pitch, pw;
+
+      pw = width + (widthMod * widthModMult);
+      pitch = (hz * hzRatio) + (hzMod * hzModMult);
+      sig = PulseDPW.ar(pitch, pw, mul: 0.3);
+
+      Out.ar(out, sig);
+    }).add;
 
     SynthDef(\lark_vca, {
       arg out=0, in=0, amp=0.2, ampMod=1;
@@ -164,47 +175,16 @@ Lark {
     })
   }
 
-  // Sets the given envelope number to be an ADSR
-  // setEnvAdsr {
-  //   arg which, attack=0.2, decay=0.3, sustain=0.7, release=0.2;
-  //
-  //   envelopes[which] = Dictionary.with(
-  //     \type -> \adsr_mod,
-  //     \params -> [\i_atk, attack, \i_decay, decay, \i_sus, sustain, \i_rel, release],
-  //     // NOTE: the above could also just be a dictionary with the synthdef arg names and then call
-  //     // Dictionary.getPairs at synth creation time.
-  //   );
-  // }
-
-  // Play a note
-  // noteOn {
-  //   arg hz=120, amp=0.1, bufPos=0, rel=0.2, spread=0.2, spreadHz=0.2, atk=0.2, decay=0.3, sus=0.7;
-  //   ^if(oscA_enabled, {
-  //     Synth(this.oscA_type, [
-  //       \hz, hz,
-  //       \amp, amp,
-  //       \bufPos, bufPos,
-  //       \i_buf, this.oscA_table.baseBuf,
-  //       \i_numBuf, this.oscA_table.numBuf,
-  //       \i_rel, rel,
-  //       \spread, spread,
-  //       \spread_hz, spreadHz,
-  //       \i_atk, atk,
-  //       \i_decay, decay,
-  //       \i_sus, sus,
-  //       \i_rel, rel,
-  //     ], this.server);
-  //   }, { nil });
-  // }
-
-  noteOn2 {
+  noteOn {
     arg hz, amp;
 
     ^LarkVoice.new.start(
       this.server,
       this.voicesGroup,
       out: 0,
-      oscSpec: this.osc1Spec,
+      oscASpec: this.osc1Spec,
+      oscBSpec: this.osc2Spec,
+      oscSubSpec: this.oscSubSpec,
       ampSpec: this.ampSpec,
       modSpecs: [this.posSpec],
       hz: hz,
@@ -221,8 +201,22 @@ Lark {
     ]);
   }
 
+  osc2Spec {
+    ^LarkSpec.new(oscB_type, [
+      \i_startBuf, oscB_table.baseBuf,
+      \i_numBuf, oscB_table.numBuf,
+      \hzRatio, -12.midiratio,
+    ]);
+  }
+
+  oscSubSpec {
+    ^LarkSpec.new(\lark_pulse, [
+      \hzRatio, -12.midiratio,
+    ]);
+  }
+
   ampSpec {
-   ^LarkSpec.new(\lark_adsr, [
+    ^LarkSpec.new(\lark_adsr, [
       \i_atk, 0.2,
       \i_decay, 0.3,
       \i_sus, 0.7,
@@ -274,15 +268,20 @@ LarkVoice {
   var <modSources;
 
   var <oscA;
+  var <oscB;
+  var <oscSub;
+  var <oscNoise;
 
   var <ampEnv;
   var <ampSyn;
 
 
   start {
-    arg server, target, out=0, oscSpec, ampSpec, modSpecs=[], hz=300, amp=0.2;
+    arg server, target, out=0, oscASpec, oscBSpec, oscSubSpec, oscNoiseSpec, ampSpec, modSpecs=[], hz=300, amp=0.2;
+    var oscArgs;
 
-    Post << "LarkVoice(" << server << ", " << target << ", " << out << ", " << oscSpec << ", " << ampSpec << ", " << hz << ", " << amp << ")\n";
+    Post << "LarkVoice(" << server << ", " << target << ", " << out << ", "
+    << [oscASpec, oscBSpec, oscSubSpec, oscNoiseSpec] << ", " << ampSpec << ", " << hz << ", " << amp << ")\n";
 
     // create a group to contain the synths for the voice
     voiceGroup = Group.new(target);
@@ -293,18 +292,34 @@ LarkVoice {
     gateBus = Bus.control(server, 1);
     ampBus = Bus.control(server, 1);
 
+    // create secondary envs, mapping gate
     modBusses = modSpecs.collectAs({ arg spec, i; Bus.control(server, 1) }, Array);
     modSources = modSpecs.collectAs({ arg spec, i;
-      Synth.new(spec.defName, [\out, modBusses[i], \gate, gateBus] ++ spec.args, voiceGroup, \addToHead);
-      // m.map(\gate, gateBus);
+      var n = Synth.new(spec.defName, [\out, modBusses[i], /*\gate, gateBus*/] ++ spec.args, voiceGroup, \addToHead);
+      n.map(\gate, gateBus);
+      n;
     }, Array);
 
-    // create secondary envs, mapping gate
-
     // create osc synths (before mixer), mapping modulators,
-    oscA = Synth.new(oscSpec.defName, [\out, voiceBus] ++ oscSpec.args, voiceGroup, \addToTail);
-    oscA.map(\hz, pitchBus, \posMod, modBusses[0]);
-    //oscA.map(\hz, pitchBus);
+    if(oscASpec.notNil, {
+      oscA = Synth.new(oscASpec.defName, [\out, voiceBus] ++ oscASpec.args, voiceGroup, \addToTail);
+      oscA.map(\hz, pitchBus, \posMod, modBusses[0]);
+    });
+
+    if(oscBSpec.notNil, {
+      oscB = Synth.new(oscBSpec.defName, [\out, voiceBus] ++ oscBSpec.args, voiceGroup, \addToTail);
+      oscB.map(\hz, pitchBus);
+    });
+
+    if(oscSubSpec.notNil, {
+      oscSub = Synth.new(oscSubSpec.defName, [\out, voiceBus] ++ oscSubSpec.args, voiceGroup, \addToTail);
+      oscSub.map(\hz, pitchBus);
+    });
+
+    if(oscNoiseSpec.notNil, {
+      oscNoise = Synth.new(oscNoiseSpec.defName, [\out, voiceBus] ++ oscNoiseSpec.args, voiceGroup, \addToTail);
+      oscNoise.map(\hz, pitchBus);
+    });
 
     // create filter (after mixer)
 

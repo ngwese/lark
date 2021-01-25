@@ -25,9 +25,6 @@ mod(~x.size, 64)
 
 
 (
-
-var notes, on, off;
-
 MIDIClient.init;
 MIDIIn.connectAll;
 
@@ -39,35 +36,32 @@ MIDIIn.connectAll;
   2048
 );
 
+~engine.oscB_type = \lark_osc1;
+~engine.oscB_table = LarkTable.fromFile(
+  s,
+  "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/Jno.wav",
+  2048
+);
 
 ~notes = Array.newClear(128);
 
 MIDIdef.noteOn(\noteOn, { arg vel, num, chan, src;
-  ~notes[num] = ~engine.noteOn2(
-    hz: num.midicps,
-    amp: vel * 0.00315,
-    // atk: 1,
-    // decay: 0.4,
-    // sus: 0.85,
-    // rel: 4,
-  );
+  ~notes[num] = ~engine.noteOn(num.midicps, vel * 0.00315);
 });
 
 MIDIdef.noteOff(\noteOff, { arg vel, num, chan, src;
-  // notes[num].set(\gate, 0);
   ~notes[num].stop;
   ~notes[num].release;
-
 });
 
 )
 
 ~engine.oscA_table
+~engine.oscA_type = \lark_osc3
 
-
-~engine.osc1Spec
+~engine.osc2Spec
 ~engine.posSpec
-
+~engine.oscA_table = ~engine.default_table
 ~engine.server
 ~v = LarkVoice.new
 ~x = ~v.start(~engine.server, ~engine.voicesGroup, 0, ~engine.osc1Spec, ~engine.ampSpec, [~engine.posSpec]);
