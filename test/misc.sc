@@ -29,18 +29,18 @@ MIDIClient.init;
 MIDIIn.connectAll;
 
 ~engine = Lark.new(s);
-~engine.oscA_type = \lark_osc3;
-~engine.oscA_table = LarkTable.fromFile(
-  s,
-  "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav",
-  2048
-);
+~engine.osc1_type = \lark_osc3;
+// ~engine.osc1_table = LarkTable.fromFile(
+//   s,
+//   "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav",
+//   2048
+// );
 
-~engine.oscB_type = \lark_osc1;
-~engine.oscB_table = LarkTable.fromFile(
+~engine.osc2_type = \lark_osc1;
+~engine.osc2_table = LarkTable.fromFile(
   s,
-  "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/Jno.wav",
-  2048
+  // "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/Jno.wav", 2048
+  "/Applications/WaveEdit/banks/ROM B.wav", 256
 );
 
 ~notes = Array.newClear(128);
@@ -56,13 +56,22 @@ MIDIdef.noteOff(\noteOff, { arg vel, num, chan, src;
 
 )
 
-~engine.oscA_table
-~engine.oscA_type = \lark_osc3
+~engine.noise_enabled = false;
+~engine.setControl(\noise_level, 0.02);
+
+~engine.sub_enabled = false;
+~engine.sub_enabled = true;
+~engine.setControl(\sub_tune, -5.midiratio);
+
+~engine.osc1_table
+~engine.osc1_type = \lark_osc3
 
 ~engine.osc2Spec
 ~engine.posSpec
-~engine.oscA_table = ~engine.default_table
-~engine.server
+~engine.osc1_table = ~engine.defaultTable
+~engine.globalControls.asPairs
+
+
 ~v = LarkVoice.new
 ~x = ~v.start(~engine.server, ~engine.voicesGroup, 0, ~engine.osc1Spec, ~engine.ampSpec, [~engine.posSpec]);
 ~x.modBusses
@@ -77,29 +86,39 @@ MIDIdef.noteOff(\noteOff, { arg vel, num, chan, src;
 ~x.ampBus.set(0.1);
 
 ~engine.buffers[26]
-~engine.oscA_type = \lark_silent;
+~engine.osc1_type = \lark_silent;
 
 (
-~engine.oscA_table = LarkTable.fromFile(
+~engine.osc1_table = LarkTable.fromFile(
   s,
   "/Library/Audio/Presets/Xfer Records/Serum Presets/Tables/Analog/SawRounded.wav",
   2048
 );
 )
 
-~engine.oscA_table = ~engine.default_table
+~engine.osc1_table = ~engine.defaultTable
 
-~engine.default_table.buffers
-~engine.oscA_table.buffers
+~engine.defaultTable.buffers
+~engine.osc1_table.buffers
 
-~engine.mod_group
-~engine.params
-
-
-x = [\one, \two, \three]
-y = Array.fill(x.size, { Bus.control(s, 1) })
-x.collectAs({|item, i| item -> y[i]}, Dictionary)
+if(true, { 1 });
 
 (
-[\a, 1] ++ [\b, 2, \c, 5].postln;
+~f = { arg one, two; Post << "f: " << one << ", " << two << "\n"; };
 )
+~f.postcs
+
+~f.applyTo([\one, 2, \two, 4])
+
+
+NetAddr.langPort
+
+h = CroneHarness.new;
+h.engine('Lark');
+
+h.cmd('/start', [1, 300, 0.2]);
+h.cmd('/stop', [1]);
+
+Crone.reportEngines;
+
+
