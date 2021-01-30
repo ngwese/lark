@@ -3,7 +3,10 @@
 //
 Lark {
   var <server;
+  var <defs;
+
   var <parentGroup;
+  var <outBus;
 
   var <defaultTable;
   var <randomTable;
@@ -32,20 +35,24 @@ Lark {
   var <>noise_enabled;
   var <noise_mappings;
 
+  var <voices;
+  var <voiceStarted;
+
   // var <>envelopes;
   // var <>lfos;
 
   // Create and initialize a new Lark instance on the given server
-  *new { arg server, group;
-    ^super.new.init(server)
+  *new { arg server, group, out=0;
+    ^super.new.init(server, group, out);
   }
 
   // Initialize class and define server side resources
-  init { arg srv, group;
-    server = srv;
-    parentGroup = if(group.isNil, {srv}, {group});
+  init { arg argServer, argGroup, argOut;
+    server = argServer;
+    parentGroup = if(argGroup.isNil, {server}, {argGroup});
+    outBus = argOut;
 
-    Post << "Lark.init: server = " << server << ", xg = " << parentGroup << "\n";
+    Post << "Lark.init: server = " << server << ", xg = " << parentGroup << ", out = " << outBus << "\n";
 
     //
     // Define synth(s)
@@ -58,11 +65,11 @@ Lark {
       sig = EnvGen.kr(
         Env.adsr(i_atk, i_decay, i_sus, i_rel),
         gate: gate,
-        doneAction: i_done,
+        // doneAction: Done.freeGroup,
       );
 
       Out.kr(out, sig);
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_sweep, {
       arg out=0, gate=0, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1, i_done=0;
@@ -71,11 +78,11 @@ Lark {
       sig = EnvGen.kr(
         Env([0,1,0.5,0],[i_atk,i_sus,i_rel],[1,0,-1]),
         gate: gate,
-        doneAction: i_done,
+        // doneAction: i_done,
       );
 
       Out.kr(out, sig);
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_noise_sweep, {
       arg out=0;
@@ -84,7 +91,19 @@ Lark {
       sig = LFNoise1.kr(2).unipolar;
 
       Out.kr(out, Clip.kr(sig));
-    }).add;
+    }).send(server);
+
+    SynthDef(\lark_sine, {
+      arg out=0,
+          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0;
+      var sig, pitch;
+
+      pitch = (hz * hzRatio) + (hzMod * hzModMult);
+      sig = SinOsc.ar(hz, mul: 0.3);
+
+      Out.ar(out, sig /* level*/);
+    }).send(server);
+
 
     SynthDef(\lark_osc1, {
       arg out=0,
@@ -98,7 +117,7 @@ Lark {
       sig = LeakDC.ar(VOsc.ar(buffer, freq: pitch, mul: 0.3));
 
       Out.ar(out, sig * level);
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_osc3, {
       arg out=0,
@@ -114,7 +133,7 @@ Lark {
       sig = LeakDC.ar(VOsc3.ar(buffer, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3));
 
       Out.ar(out, sig * level);
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_pulse, {
       arg out=0, hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
@@ -126,36 +145,36 @@ Lark {
       sig = PulseDPW.ar(pitch, pw, mul: 0.3);
 
       Out.ar(out, sig * level);
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_white_noise, {
       arg out=0, level=1.0;
       Out.ar(out, WhiteNoise.ar(level));
-    }).add;
+    }).send(server);
 
     SynthDef(\lark_vca, {
       arg out=0, in=0, amp=0.2, ampMod=1;
       var sig = In.ar(in) * ampMod * amp;
       Out.ar(out, sig!2);
-    }).add;
+    }).send(server);
 
 
     //
     // Setup global controls and parameter defaults
     //
 
-    defaultTable = LarkTable.new(srv).load(LarkWaves.default);
-    randomTable = LarkTable.new(srv).load(LarkWaves.random);
+    defaultTable = LarkTable.new(server).load(LarkWaves.default);
+    randomTable = LarkTable.new(server).load(LarkWaves.random);
 
     // Control busses for global parameters which drive all voices (non per-note parameters)
     globalDefaults = IdentityDictionary.with(
       \osc1_pos -> 0.0,
       \osc1_level -> 0.dbamp,
-      \osc1_tune -> 0.0,  // as ratio of pitch, -12.midiratio for -12 semitones
+      \osc1_tune -> 0.0.midiratio,  // as ratio of pitch, -12.midiratio for -12 semitones
 
       \osc2_pos -> 0.0,
       \osc2_level -> 0.dbamp,
-      \osc2_tune -> 0.0,
+      \osc2_tune -> 0.0.midiratio,
 
       \sub_level -> -12.dbamp,
       \sub_tune -> -12.midiratio,
@@ -177,6 +196,7 @@ Lark {
     fxGroup = Group.after(voicesGroup);
 
     osc1_type = \lark_osc1;
+    // osc1_type = \lark_sine;
     osc1_enabled = true;
     osc1_table = randomTable;
     osc1_mappings = [
@@ -205,7 +225,12 @@ Lark {
     noise_mappings = [
       \level, globalControls[\noise_level],
     ];
+
+    // allocate voices
+    this.allocVoices(4);
   }
+
+
 
   free {
     globalControls.values.do({_.free});
@@ -226,13 +251,14 @@ Lark {
   }
 
 
+/*
   noteOn {
     arg hz, amp;
 
     ^LarkVoice.new.start(
       this.server,
       this.voicesGroup,
-      out: 0,
+      out: this.outBus,
       osc1Spec: if(osc1_enabled, {this.osc1Spec}),
       osc2Spec: if(osc2_enabled, {this.osc2Spec}),
       oscSubSpec: if(sub_enabled, {this.oscSubSpec}),
@@ -242,6 +268,45 @@ Lark {
       hz: hz,
       amp: amp
     );
+  }
+  */
+
+  allocVoices {
+    arg n;
+
+    if(voices.notNil, {
+      voices.do({arg v; v.free });
+    });
+
+    voices = n.collectAs({ LarkVoice.new(
+      this.server,
+      this.voicesGroup,
+      out: this.outBus,
+      osc1Spec: if(osc1_enabled, {this.osc1Spec}),
+      osc2Spec: if(osc2_enabled, {this.osc2Spec}),
+      oscSubSpec: if(sub_enabled, {this.oscSubSpec}),
+      oscNoiseSpec: if(noise_enabled, {this.oscNoiseSpec}),
+      ampSpec: this.ampSpec,
+      modSpecs: [this.posSpec],
+    ) }, Array);
+
+    voiceStarted = Array.fill(n, { false });
+  }
+
+  voiceCount {
+    ^voices.size;
+  }
+
+  start {
+    arg n=0, hz=300, amp=0.2;
+    voices[n].start(hz, amp);
+    voiceStarted[n] = true;
+  }
+
+  stop {
+    arg n=0;
+    voices[n].stop;
+    voiceStarted[n] = false;
   }
 
   osc1Spec {
@@ -317,6 +382,7 @@ LarkVoice {
   var <pitchBus;
   var <gateBus;
   var <ampBus;
+  var <ampScaleBus;
 
   var <modBusses;
   var <modSources;
@@ -329,33 +395,38 @@ LarkVoice {
   var <ampEnv;
   var <ampSyn;
 
+  *new {
+    arg server, target, out=0, osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec, ampSpec, modSpecs=[];
+    ^super.new.init(server, target, out, osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec, ampSpec, modSpecs);
+  }
 
-  start {
-    arg server, target, out=0, osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec, ampSpec, modSpecs=[], hz=300, amp=0.2;
+  init {
+    arg server, target, out=0, osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec, ampSpec, modSpecs=[];
 
-    Post << "LarkVoice(" << server << ", " << target << ", " << out << ", "
-    << [osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec] << ", " << ampSpec << ", " << hz << ", " << amp << ")\n";
+    Post << "LarkVoice.init(" << server << ", " << target << ", " << out << ", "
+    << [osc1Spec, osc2Spec, oscSubSpec, oscNoiseSpec] << ", " << ampSpec << ")\n";
 
     // create a group to contain the synths for the voice
     voiceGroup = Group.new(target);
     voiceBus = Bus.audio(server, 1);
 
     // create a voice specific control busses
-    pitchBus = Bus.control(server, 1); pitchBus.set(hz);
+    pitchBus = Bus.control(server, 1);
     gateBus = Bus.control(server, 1);
     ampBus = Bus.control(server, 1);
+    ampScaleBus = Bus.control(server, 1);
 
     // create secondary envs, mapping gate
     modBusses = modSpecs.collectAs({ arg spec, i; Bus.control(server, 1) }, Array);
     modSources = modSpecs.collectAs({ arg spec, i;
-      var n = Synth.new(spec.defName, [\out, modBusses[i], /*\gate, gateBus*/] ++ spec.args, voiceGroup, \addToHead);
+      var n = Synth.new(spec.defName, [\out, modBusses[i]] ++ spec.args, voiceGroup, \addToHead);
       n.map(\gate, gateBus);
       n;
     }, Array);
 
     // create osc synths (before mixer), mapping modulators,
     if(osc1Spec.notNil, {
-      osc1 = Synth.new(osc1Spec.defName, [\out, voiceBus] ++ osc1Spec.args, voiceGroup, \addToTail);
+      osc1 = Synth.new(osc1Spec.defName, [\out, voiceBus.index] ++ osc1Spec.args, voiceGroup, \addToTail);
       osc1.performList(\map, osc1Spec.paramMappings);
       osc1.map(\hz, pitchBus, \posMod, modBusses[0]);
     });
@@ -381,15 +452,20 @@ LarkVoice {
     // create filter (after mixer)
 
     // scale voice ouput by amp env (after filter) and write to main bus
-    ampEnv = Synth.new(ampSpec.defName, [\i_done, Done.freeGroup, \out, ampBus] ++ ampSpec.args, voiceGroup, \addToHead);
+    ampEnv = Synth.new(ampSpec.defName, [\out, ampBus] ++ ampSpec.args, voiceGroup, \addToHead);
     ampEnv.map(\gate, gateBus);
-    ampSyn = Synth.new(\lark_vca, [\out, out, \in, voiceBus, \amp, amp], voiceGroup, \addToTail);
-    ampSyn.map(\ampMod, ampBus);
+    ampSyn = Synth.new(\lark_vca, [\out, out, \in, voiceBus], voiceGroup, \addToTail);
+    ampSyn.map(\ampMod, ampBus, \amp, ampScaleBus);
+  }
 
+  start {
+    arg hz, amp;
+    pitchBus.set(hz);
+    ampScaleBus.set(amp);
     gateBus.set(1);
 
     Post << "   gate: " << gateBus.get << "\n";
-    Post << "  pitch: " << pitchBus.get << "\n";
+    Post << "  pitch: " << hz << "\n";
     Post << "    amp: " << amp << "\n";
   }
 
@@ -399,6 +475,13 @@ LarkVoice {
 
   free {
     voiceGroup.freeAll;
+    voiceBus.free;
+    pitchBus.free;
+    gateBus.free;
+    ampBus.free;
+    ampScaleBus.free;
+    modSources.do({ arg s; s.free; });
+    modBusses.do({ arg b; b.free; });
   }
 
   setPitch { arg hz;
@@ -408,6 +491,19 @@ LarkVoice {
   setAmp { arg amp;
     ampBus.set(amp);
   }
+
+  printOn {
+    arg stream;
+    stream << "LarkVoice:\n";
+    stream << "-------------------------------\n";
+    stream << "  group: " << voiceGroup << "\n";
+    stream << "    bus: " << voiceBus << "\n";
+    stream << "  pitch: " << pitchBus << "\n";
+    stream << "   gate: " << gateBus << "\n";
+    stream << " ampMod: " << ampBus << "\n";
+    stream << "    amp: " << ampScaleBus << "\n";
+  }
+
 }
 
 //
@@ -478,6 +574,7 @@ LarkTable {
   var <baseBuf;
   var <numBuf;
   var <numLoaded;
+  var <isReady;
 
   *fromFile { arg server, path, waveSize;
     ^this.new(server).load(LarkWaves.fromFile(path, waveSize));
@@ -505,7 +602,9 @@ LarkTable {
 
     buffers = Buffer.allocConsecutive(waves.size, server, waves[0].size);
     buffers.do({ arg buf, i;
-      buf.loadCollection(waves[i], action: { arg buf; numLoaded = numLoaded + 1; });
+      buf.loadCollection(waves[i], action: { arg buf;
+        numLoaded = numLoaded + 1;
+      });
     });
 
     baseBuf = buffers[0].bufnum;
@@ -541,6 +640,15 @@ LarkTable {
 ~q.free
 
 ~f = Lark.new(s);
+
+~f.allocVoices(2)
+
+~f.start(0, 300, 0.5);
+~f.stop(0);
+~f.voices[0].setPitch(400);
+~f.voices[0].ampBus.get
+~f.voices[0].voiceBus.scope
+~f.voices[0].osc1
 
 ~f.osc1Spec
 ~f.ampSpec

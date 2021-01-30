@@ -116,9 +116,15 @@ NetAddr.langPort
 h = CroneHarness.new;
 h.engine('Lark');
 
-h.cmd('/start', [1, 300, 0.2]);
-h.cmd('/stop', [1]);
+h.cmd('/start', [0, 300, 0.5]);
+h.cmd('/stop', [0]);
 
 Crone.reportEngines;
 
 
+4.collectAs({arg i; i}, Array).size;
+
+Crone.engine.lark.voices[0]
+Crone.engine.lark.voices[0].ampEnv.get(\gate, {arg v; v.postln; });
+Crone.engine.lark.globalControls[\osc1_pos].get
+Crone.engine.lark.voices[0].voiceBus.scope

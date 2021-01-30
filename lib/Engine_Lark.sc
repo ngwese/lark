@@ -7,35 +7,33 @@ Engine_Lark : CroneEngine {
 	}
 
   alloc {
-    lark = Lark.new(context.server, context.xg);
-    voices = IdentityDictionary.new;
+    lark = Lark.new(this.context.server, this.context.xg, this.context.out_b);
 
     context.server.sync;
 
     this.addCommand(\start, "iff", { arg msg;
-      var id = msg[0];
-      var existingVoice = voices[id];
+      var n = msg[1];
 
-      // if re-using id of an active voice, kil the voice
+      // if re-using id of an active voice, kill the voice
       // TODO: should this fade the voice out?
-      if (existingVoice.notNil, {
-        Post << "Killing voice [" << id << "]\n";
-        existingVoice.free;
+      if (lark.voiceStarted[n], {
+        Post << "Stopping voice [" << n << "]\n";
+        lark.stop(n);
       });
 
-      voices.add(id -> lark.noteOn(msg[1], msg[2]));
+      Post << "voice " << n << " start(" << msg[2] << ", " << msg[3] << ")\n";
+
+      lark.start(n, msg[2], msg[3]);
     });
 
     this.addCommand(\stop, "i", { arg msg;
-      var id = msg[0];
-      voices[id].stop;
-      voices[id].release;
+      lark.stop(msg[1]);
     });
 
     this.addCommand(\set_control, "sf", { arg msg;
       // MAINT: temporary stop gap until commands are defined for all messages
-      var control = msg[0].asSymbol;
-      lark.setControl(control, msg[1]);
+      var control = msg[1].asSymbol;
+      lark.setControl(control, msg[2]);
     });
   }
 
