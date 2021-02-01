@@ -30,10 +30,43 @@ Engine_Lark : CroneEngine {
       lark.stop(msg[1]);
     });
 
-    this.addCommand(\set_control, "sf", { arg msg;
+    this.addCommand(\control, "sf", { arg msg;
       // MAINT: temporary stop gap until commands are defined for all messages
       var control = msg[1].asSymbol;
       lark.setControl(control, msg[2]);
+    });
+
+    lark.globalControls.keysValuesDo({ arg key, value;
+      this.addCommand(key, "f", { arg msg;
+        lark.globalControls.at(key).set(msg[1]);
+      });
+    });
+
+    this.addCommand(\voice_pitch, "if", { arg msg;
+      var v = lark.voices[msg[1]];
+      if (v.notNil) {
+        v.setPitch(msg[2]);
+      };
+    });
+
+    this.addCommand(\voice_amp, "if", { arg msg;
+      var v = lark.voices[msg[1]];
+      if (v.notNil) {
+        v.setAmp(msg[2]);
+      };
+    });
+
+    this.addCommand(\osc1_table, "is", { arg msg;
+      var v = lark.voices[msg[1]];
+      var t;
+      if (v.notNil) {
+        t = LarkRegistry.at(msg[2]);
+        if(t.notNil, {
+          v.osc1 = lark.oscSpec(t, lark.osc1_mappings);
+        }, {
+          Post << "Lark: unknown table: '" << msg[2] << "'\n";
+        });
+      }
     });
   }
 

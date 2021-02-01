@@ -116,15 +116,59 @@ NetAddr.langPort
 h = CroneHarness.new;
 h.engine('Lark');
 
-h.cmd('/start', [0, 300, 0.5]);
+h.cmd('/start', [0, 130, 0.5]);
 h.cmd('/stop', [0]);
+
+h.cmd('/voice_pitch', [0, 440]);
+h.cmd('/voice_pitch', [0, 140]);
+h.cmd('/voice_pitch', [0, 110]);
+h.cmd('/voice_amp', [0, 0.2]);
+
+h.cmd('/osc1_table', [0, "default"]);
+h.cmd('/osc1_table', [0, "random1"]);
+h.cmd('/osc1_table', [0, "random2"]);
+h.cmd('/osc1_table', [0, "4088"]);
+
+h.cmd('/start', [1, 220, 0.4]);
+h.cmd('/voice_pitch', [1, 110]);
+h.cmd('/stop', [1]);
+
+h.cmd('/osc1_pos_mod', [1]);
+h.cmd('/osc1_pos',   [0]);
+
+h.cmd('/sub_level',   [0.7]);
+h.cmd('/sub_level',   [0]);
+h.cmd('/sub_tune',   [0.25]);
+h.cmd('/sub_tune',   [0.5]);
+
+h.cmd('/osc2_level', [0]);
+h.cmd('/osc1_level', [0.5]);
+
+h.cmd('/table_load', ["name", "path", 1024]);
+
+//h.cmd('/
+
 
 Crone.reportEngines;
 
 
 4.collectAs({arg i; i}, Array).size;
 
-Crone.engine.lark.voices[0]
+~x = Crone.engine.lark;
+
+~x.voices[0].osc1 = ~x.oscSpec(LarkRegistry.at(\default), ~x.osc1_mappings);
+~x.voices[0].osc1 = ~x.oscSpec(LarkRegistry.at(\random1), ~x.osc1_mappings);
+~x.voices[0].osc1 = ~x.oscSpec(LarkRegistry.at(\random2), ~x.osc1_mappings);
+~x.voices[0].osc1 = ~x.oscSpec(LarkRegistry.at("4088"), ~x.osc1_mappings);
+
+~x.globalControls.do({ arg a; a.key.postln; })
+
+// ~x.voices[0].osc1_
+
+~x.oscSpec(~x.randomTable, ~x.osc1_mappings)
+~x.oscSpec(~x.defaultTable, ~x.osc1_mappings)
+
+Crone.engine.lark.voices[0].osc1 = Crone.engine.lark.
 Crone.engine.lark.voices[0].ampEnv.get(\gate, {arg v; v.postln; });
 Crone.engine.lark.globalControls[\osc1_pos].get
 Crone.engine.lark.voices[0].voiceBus.scope
@@ -133,3 +177,7 @@ Lark.defsLoaded.test
 ~q = Lark.new(s)
 
 Lark.definitions.do({arg d; postln(d.name)})
+
+Lark.definitions.do { arg d; postln(d.name) }
+
+("set_" ++ \foo).asSymbol
