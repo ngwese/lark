@@ -306,9 +306,16 @@ LarkVoice {
   var <modBusses;
   var <modSources;
 
+  var <osc1Spec;
   var <osc1;
+
+  var <osc2Spec;
   var <osc2;
+
+  var <oscSubSpec;
   var <oscSub;
+
+  var <oscNoiseSpec;
   var <oscNoise;
 
   var <ampEnv;
@@ -348,28 +355,10 @@ LarkVoice {
     }, Array);
 
     // create osc synths (before mixer), mapping modulators,
-    if(osc1Spec.notNil, {
-      osc1 = Synth.new(osc1Spec.defName, [\out, voiceBus.index] ++ osc1Spec.args, oscGroup);
-      osc1.performList(\map, osc1Spec.paramMappings);
-      osc1.map(\posMod, modBusses[0]);
-    });
-
-    if(osc2Spec.notNil, {
-      osc2 = Synth.new(osc2Spec.defName, [\out, voiceBus] ++ osc2Spec.args, oscGroup);
-      osc2.performList(\map, osc2Spec.paramMappings);
-      osc2.map(\posMod, modBusses[0]);
-
-    });
-
-    if(oscSubSpec.notNil, {
-      oscSub = Synth.new(oscSubSpec.defName, [\out, voiceBus] ++ oscSubSpec.args, oscGroup);
-      oscSub.performList(\map, oscSubSpec.paramMappings);
-    });
-
-    if(oscNoiseSpec.notNil, {
-      oscNoise = Synth.new(oscNoiseSpec.defName, [\out, voiceBus] ++ oscNoiseSpec.args, oscGroup);
-      oscNoise.performList(\map, oscNoiseSpec.paramMappings);
-    });
+    this.osc1 = osc1Spec;
+    this.osc2 = osc2Spec;
+    this.oscSub = oscSubSpec;
+    this.oscNoise = oscNoiseSpec;
 
     // create filter (after mixer)
 
@@ -384,14 +373,55 @@ LarkVoice {
   }
 
   osc1_ { arg spec;
+    osc1Spec = spec;
     if (osc1.notNil) {
       osc1.free;
+      osc1 = nil;
     };
+    if (spec.notNil) {
+      osc1 = Synth.new(spec.defName, [\out, voiceBus.index] ++ spec.args, oscGroup);
+      osc1.performList(\map, spec.paramMappings);
+      // FIXME: this probably isn't going to pick of the shared voice group mappings
+      osc1.map(\hz, pitchBus, \posMod, modBusses[0]);
+    };
+  }
 
-    osc1 = Synth.new(spec.defName, [\out, voiceBus.index] ++ spec.args, oscGroup);
-    osc1.performList(\map, spec.paramMappings);
-    // FIXME: this probably isn't going to pick of the shared voice group mappings
-    osc1.map(\hz, pitchBus, \posMod, modBusses[0]);
+  osc2_ { arg spec;
+    osc2Spec = spec;
+    if (osc2.notNil) {
+      osc2.free;
+      osc2 = nil;
+    };
+    if (spec.notNil) {
+      osc2 = Synth.new(spec.defName, [\out, voiceBus.index] ++ spec.args, oscGroup);
+      osc2.performList(\map, spec.paramMappings);
+      // FIXME: this probably isn't going to pick of the shared voice group mappings
+      osc2.map(\hz, pitchBus, \posMod, modBusses[0]);
+    }
+  }
+
+  oscSub_ { arg spec;
+    oscSubSpec = spec;
+    if (oscSub.notNil) {
+      oscSub.free;
+      oscSub = nil;
+    };
+    if (spec.notNil) {
+      oscSub = Synth.new(spec.defName, [\out, voiceBus] ++ spec.args, oscGroup);
+      oscSub.performList(\map, spec.paramMappings);
+    };
+  }
+
+  oscNoise_ { arg spec;
+    oscNoiseSpec = spec;
+    if (oscNoise.notNil) {
+      oscNoise.free;
+      oscNoise = nil;
+    };
+    if (oscNoiseSpec.notNil) {
+      oscNoise = Synth.new(oscNoiseSpec.defName, [\out, voiceBus] ++ oscNoiseSpec.args, oscGroup);
+      oscNoise.performList(\map, oscNoiseSpec.paramMappings);
+    };
   }
 
   start {
