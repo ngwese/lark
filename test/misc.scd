@@ -128,3 +128,8 @@ Crone.engine.lark.voices[0]
 Crone.engine.lark.voices[0].ampEnv.get(\gate, {arg v; v.postln; });
 Crone.engine.lark.globalControls[\osc1_pos].get
 Crone.engine.lark.voices[0].voiceBus.scope
+
+Lark.defsLoaded.test
+~q = Lark.new(s)
+
+Lark.definitions.do({arg d; postln(d.name)})

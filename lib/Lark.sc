@@ -1,9 +1,13 @@
+
+LarkDefs {
+
+}
+
 //
 // Lark, a wavetable synth
 //
 Lark {
   var <server;
-  var <defs;
 
   var <parentGroup;
   var <outBus;
@@ -46,125 +50,161 @@ Lark {
     ^super.new.init(server, group, out);
   }
 
+  *definitions {
+    var defs = List.new;
+
+    defs.add(
+      SynthDef(\lark_adsr, {
+        arg out=0, gate=0, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1, i_done=0;
+        var sig;
+
+        sig = EnvGen.kr(
+          Env.adsr(i_atk, i_decay, i_sus, i_rel),
+          gate: gate,
+        );
+
+        Out.kr(out, sig);
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_sweep, {
+        arg out=0, gate=0, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1, i_done=0;
+        var sig;
+
+        sig = EnvGen.kr(
+          Env([0,1,0.5,0],[i_atk,i_sus,i_rel],[1,0,-1]),
+          gate: gate,
+          // doneAction: i_done,
+        );
+
+        Out.kr(out, sig);
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_noise_sweep, {
+        arg out=0;
+        var sig;
+
+        sig = LFNoise1.kr(2).unipolar;
+
+        Out.kr(out, Clip.kr(sig));
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_sine, {
+        arg out=0, hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0;
+        var sig, pitch;
+
+        pitch = (hz * hzRatio) + (hzMod * hzModMult);
+        sig = SinOsc.ar(hz, mul: 0.3);
+
+        Out.ar(out, sig * level);
+      })
+    );
+
+
+    defs.add(
+      SynthDef(\lark_osc1, {
+        arg out=0,
+            hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
+            pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1;
+        var sig, pitch, buffer, wt;
+
+        wt = pos + posMod * posModMult;
+        buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
+        pitch = (hz * hzRatio) + (hzMod * hzModMult);
+        sig = LeakDC.ar(VOsc.ar(buffer, freq: pitch, mul: 0.3));
+
+        Out.ar(out, sig * level);
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_osc3, {
+        arg out=0,
+            hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
+            pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1,
+            spread=0.2, spreadHz=0.2;
+        var sig, pitch, buffer, detune, wt;
+
+        wt = pos + posMod * posModMult;
+        buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
+        pitch = (hz * hzRatio) + (hzMod * hzModMult);
+        detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
+        sig = LeakDC.ar(VOsc3.ar(buffer, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3));
+
+        Out.ar(out, sig * level);
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_pulse, {
+        arg out=0, hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
+            width=0.5, widthMod=0, widthModMult=1.0;
+        var sig, pitch, pw;
+
+        pw = width + (widthMod * widthModMult);
+        pitch = (hz * hzRatio) + (hzMod * hzModMult);
+        sig = PulseDPW.ar(pitch, pw, mul: 0.3);
+
+        Out.ar(out, sig * level);
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_white_noise, {
+        arg out=0, level=1.0;
+        Out.ar(out, WhiteNoise.ar(level));
+      })
+    );
+
+    defs.add(
+      SynthDef(\lark_vca, {
+        arg out=0, in=0, amp=0.2, ampMod=1;
+        var sig = In.ar(in) * ampMod * amp;
+        Out.ar(out, sig!2);
+      })
+    );
+
+    ^defs;
+  }
+
+
   // Initialize class and define server side resources
   init { arg argServer, argGroup, argOut;
+    var serverInitialized = Condition.new;
+
     server = argServer;
     parentGroup = if(argGroup.isNil, {server}, {argGroup});
     outBus = argOut;
 
+    modGroup = Group.new(parentGroup);
+    voicesGroup = Group.after(modGroup);
+    fxGroup = Group.after(voicesGroup);
+
+    voices = Array.new;
+
     Post << "Lark.init: server = " << server << ", xg = " << parentGroup << ", out = " << outBus << "\n";
 
-    //
-    // Define synth(s)
-    //
+    Routine.run({
+      Post << "...sending defs\n";
+      Lark.definitions.do({ arg d;
+        d.send(server);
+      });
 
-    SynthDef(\lark_adsr, {
-      arg out=0, gate=0, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1, i_done=0;
-      var sig;
+      Post << "...sending tables\n";
+      defaultTable = LarkTable.new(server).load(LarkWaves.default);
+      randomTable = LarkTable.new(server).load(LarkWaves.random);
 
-      sig = EnvGen.kr(
-        Env.adsr(i_atk, i_decay, i_sus, i_rel),
-        gate: gate,
-        // doneAction: Done.freeGroup,
-      );
+      server.sync;
 
-      Out.kr(out, sig);
-    }).send(server);
-
-    SynthDef(\lark_sweep, {
-      arg out=0, gate=0, i_atk=0.2, i_decay=0.3, i_sus=0.7, i_rel=1, i_done=0;
-      var sig;
-
-      sig = EnvGen.kr(
-        Env([0,1,0.5,0],[i_atk,i_sus,i_rel],[1,0,-1]),
-        gate: gate,
-        // doneAction: i_done,
-      );
-
-      Out.kr(out, sig);
-    }).send(server);
-
-    SynthDef(\lark_noise_sweep, {
-      arg out=0;
-      var sig;
-
-      sig = LFNoise1.kr(2).unipolar;
-
-      Out.kr(out, Clip.kr(sig));
-    }).send(server);
-
-    SynthDef(\lark_sine, {
-      arg out=0,
-          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0;
-      var sig, pitch;
-
-      pitch = (hz * hzRatio) + (hzMod * hzModMult);
-      sig = SinOsc.ar(hz, mul: 0.3);
-
-      Out.ar(out, sig /* level*/);
-    }).send(server);
-
-
-    SynthDef(\lark_osc1, {
-      arg out=0,
-          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
-          pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1;
-      var sig, pitch, buffer, wt;
-
-      wt = pos + posMod * posModMult;
-      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
-      pitch = (hz * hzRatio) + (hzMod * hzModMult);
-      sig = LeakDC.ar(VOsc.ar(buffer, freq: pitch, mul: 0.3));
-
-      Out.ar(out, sig * level);
-    }).send(server);
-
-    SynthDef(\lark_osc3, {
-      arg out=0,
-          hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
-          pos=0, posMod=0, posModMult=1.0, i_startBuf=0, i_numBuf=1,
-          spread=0.2, spreadHz=0.2;
-      var sig, pitch, buffer, detune, wt;
-
-      wt = pos + posMod * posModMult;
-      buffer = Clip.kr(i_startBuf + (wt * (i_numBuf - 0.001)), i_startBuf, i_numBuf - 0.001);
-      pitch = (hz * hzRatio) + (hzMod * hzModMult);
-      detune = LFNoise1.kr(spreadHz!3).bipolar(spread).midiratio;
-      sig = LeakDC.ar(VOsc3.ar(buffer, freq1: hz*detune[0], freq2: hz*detune[1], freq3: hz*detune[2], mul: 0.3));
-
-      Out.ar(out, sig * level);
-    }).send(server);
-
-    SynthDef(\lark_pulse, {
-      arg out=0, hz=300, hzRatio=1.0, hzMod=0, hzModMult=1.0, level=1.0,
-          width=0.5, widthMod=0, widthModMult=1.0;
-      var sig, pitch, pw;
-
-      pw = width + (widthMod * widthModMult);
-      pitch = (hz * hzRatio) + (hzMod * hzModMult);
-      sig = PulseDPW.ar(pitch, pw, mul: 0.3);
-
-      Out.ar(out, sig * level);
-    }).send(server);
-
-    SynthDef(\lark_white_noise, {
-      arg out=0, level=1.0;
-      Out.ar(out, WhiteNoise.ar(level));
-    }).send(server);
-
-    SynthDef(\lark_vca, {
-      arg out=0, in=0, amp=0.2, ampMod=1;
-      var sig = In.ar(in) * ampMod * amp;
-      Out.ar(out, sig!2);
-    }).send(server);
-
-
-    //
-    // Setup global controls and parameter defaults
-    //
-
-    defaultTable = LarkTable.new(server).load(LarkWaves.default);
-    randomTable = LarkTable.new(server).load(LarkWaves.random);
+      serverInitialized.test = true;
+      serverInitialized.signal;
+      Post << "...serverSynced\n";
+    });
 
     // Control busses for global parameters which drive all voices (non per-note parameters)
     globalDefaults = IdentityDictionary.with(
@@ -191,46 +231,50 @@ Lark {
 
     this.setControlDefaults;
 
-    modGroup = Group.new(parentGroup);
-    voicesGroup = Group.after(modGroup);
-    fxGroup = Group.after(voicesGroup);
+    Routine.run({
+      // wait for defs and default buffers to land
+      serverInitialized.wait;
 
-    osc1_type = \lark_osc1;
-    // osc1_type = \lark_sine;
-    osc1_enabled = true;
-    osc1_table = randomTable;
-    osc1_mappings = [
-      \level, globalControls[\osc1_level],
-      \pos, globalControls[\osc1_pos],
-      \hzRatio, globalControls[\osc1_tune],
-    ];
+      Post << "...setting default configuration\n";
 
-    osc2_type = \lark_osc1;
-    osc2_enabled = false;
-    osc2_table = defaultTable;
-    osc2_mappings = [
-      \level, globalControls[\osc2_level],
-      \pos, globalControls[\osc2_pos],
-      \hzRatio, globalControls[\osc2_tune],
-    ];
+      // default configuration
+      osc1_type = \lark_osc3;
+      osc1_enabled = true;
+      osc1_table = randomTable;
+      osc1_mappings = [
+        \level, globalControls[\osc1_level],
+        \pos, globalControls[\osc1_pos],
+        \hzRatio, globalControls[\osc1_tune],
+      ];
 
-    sub_enabled = false;
-    sub_mappings = [
-      \level, globalControls[\sub_level],
-      \hzRatio, globalControls[\sub_tune],
-    ];
+      osc2_type = \lark_osc3;
+      osc2_enabled = true;
+      osc2_table = defaultTable;
+      osc2_mappings = [
+        \level, globalControls[\osc2_level],
+        \pos, globalControls[\osc2_pos],
+        \hzRatio, globalControls[\osc2_tune],
+      ];
 
-    noise_type = \lark_white_noise;
-    noise_enabled = false;
-    noise_mappings = [
-      \level, globalControls[\noise_level],
-    ];
+      sub_enabled = true;
+      sub_mappings = [
+        \level, globalControls[\sub_level],
+        \hzRatio, globalControls[\sub_tune],
+      ];
 
-    // allocate voices
-    this.allocVoices(4);
+      noise_type = \lark_white_noise;
+      noise_enabled = false;
+      noise_mappings = [
+        \level, globalControls[\noise_level],
+      ];
+
+      Post << "...allocating voices\n";
+      // allocate voices
+      this.allocVoices(4);
+
+      Post << "...voices: " << this.voices << "\n";
+    });
   }
-
-
 
   free {
     globalControls.values.do({_.free});
@@ -242,7 +286,7 @@ Lark {
   // Sets all global control busses to their default values
   setControlDefaults {
     globalControls.keys.do({ arg n;
-      globalControls[n].set(globalDefaults[n]);
+      globalControls[n].setSynchronous(globalDefaults[n]);
     })
   }
 
@@ -250,8 +294,7 @@ Lark {
     globalControls[name].set(value);
   }
 
-
-/*
+  /*
   noteOn {
     arg hz, amp;
 
@@ -596,14 +639,18 @@ LarkTable {
   // loaded wavetables are freed before loading the new set.
   //
   load { arg waves;
+    var numWaves = waves.size;
+
     this.free;    // release any Buffers held by this instance
 
     numLoaded = 0;
 
-    buffers = Buffer.allocConsecutive(waves.size, server, waves[0].size);
+    buffers = Buffer.allocConsecutive(numWaves, server, waves[0].size);
     buffers.do({ arg buf, i;
       buf.loadCollection(waves[i], action: { arg buf;
         numLoaded = numLoaded + 1;
+        isReady = numLoaded == numWaves;
+        // postln("isReady: " + isReady + "; i: " + i);
       });
     });
 
